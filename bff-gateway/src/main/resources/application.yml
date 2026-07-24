@@ -1,5 +1,8 @@
 server:
   port: 8080
+  # Honor X-Forwarded-* headers so the correct browser-facing origin (e.g. behind the
+  # nginx SPA container) is used when building OAuth redirect URIs.
+  forward-headers-strategy: framework
 
 spring:
   application:

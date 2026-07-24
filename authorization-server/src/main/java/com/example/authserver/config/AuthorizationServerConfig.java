@@ -83,8 +83,12 @@ public class AuthorizationServerConfig {
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                // 8080 = gateway origin (also used by the nginx SPA in Docker).
+                // 5173 = Vite dev server origin for local frontend development.
                 .redirectUri("http://127.0.0.1:8080/login/oauth2/code/idp")
+                .redirectUri("http://127.0.0.1:5173/login/oauth2/code/idp")
                 .postLogoutRedirectUri("http://127.0.0.1:8080/")
+                .postLogoutRedirectUri("http://127.0.0.1:5173/")
                 .scope(OidcScopes.OPENID)
                 .scope(OidcScopes.PROFILE)
                 .scope("orders.read")
