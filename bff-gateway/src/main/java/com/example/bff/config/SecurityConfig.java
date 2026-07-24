@@ -14,6 +14,7 @@ import org.springframework.security.web.server.authentication.logout.ServerLogou
 import org.springframework.security.web.server.authentication.HttpStatusServerEntryPoint;
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
 import org.springframework.security.web.server.csrf.CsrfToken;
+import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler;
 import org.springframework.web.server.WebFilter;
 import reactor.core.publisher.Mono;
 
@@ -48,9 +49,13 @@ public class SecurityConfig {
                 // Return 401 (instead of a cross-origin redirect) so the SPA can render a login button.
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
-                // Cookie-based CSRF token readable by JS so the SPA can echo it back in a header.
+                // Cookie-based CSRF token readable by JS so the SPA can echo it back.
+                // The plain request handler expects the raw token value (the SPA reads it straight
+                // from the XSRF-TOKEN cookie). The XOR/BREACH masking used by default only matters
+                // when the token is reflected in an HTML response body, which never happens here.
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse()));
+                        .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new ServerCsrfTokenRequestAttributeHandler()));
 
         return http.build();
     }
