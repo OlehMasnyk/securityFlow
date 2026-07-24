@@ -13,6 +13,7 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -43,6 +44,14 @@ import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
  */
 @Configuration(proxyBeanMethods = false)
 public class AuthorizationServerConfig {
+
+    /**
+     * The public issuer identifier. Must be reachable under the same URL by both the browser (for the
+     * authorize redirect) and the backend services (for token exchange and JWKS). Defaults to
+     * 127.0.0.1 for local runs; Docker overrides it to the shared {@code idp} hostname.
+     */
+    @Value("${app.issuer-uri:http://127.0.0.1:9000}")
+    private String issuerUri;
 
     /**
      * Security filter chain dedicated to the protocol endpoints. It only matches the well-known
@@ -139,7 +148,7 @@ public class AuthorizationServerConfig {
     public AuthorizationServerSettings authorizationServerSettings() {
         // Issuer must match what resource servers and the BFF use to discover this provider.
         return AuthorizationServerSettings.builder()
-                .issuer("http://127.0.0.1:9000")
+                .issuer(issuerUri)
                 .build();
     }
 
