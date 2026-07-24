@@ -1,0 +1,102 @@
+# One-command demo of the OAuth 2.1 / OIDC Authorization Code + PKCE flow (BFF pattern).
+#
+# IMPORTANT: the identity provider is reached under the SAME host name by both the browser and
+# the backend containers, so add this line to your /etc/hosts before starting:
+#
+#     127.0.0.1  idp
+#
+# Then open http://127.0.0.1:8080
+
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  authorization-server:
+    build:
+      context: .
+      args:
+        MODULE: authorization-server
+    environment:
+      ISSUER_URI: http://idp:9000
+    ports:
+      - "9000:9000"
+    networks:
+      default:
+        aliases:
+          - idp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
+  orders-service:
+    build:
+      context: .
+      args:
+        MODULE: orders-service
+    environment:
+      IDP_ISSUER_URI: http://idp:9000
+    depends_on:
+      authorization-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
+  profile-service:
+    build:
+      context: .
+      args:
+        MODULE: profile-service
+    environment:
+      IDP_ISSUER_URI: http://idp:9000
+    depends_on:
+      authorization-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
+  bff-gateway:
+    build:
+      context: .
+      args:
+        MODULE: bff-gateway
+    environment:
+      IDP_ISSUER_URI: http://idp:9000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ORDERS_URI: http://orders-service:8081
+      PROFILE_URI: http://profile-service:8082
+    depends_on:
+      redis:
+        condition: service_healthy
+      authorization-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:8080"
+    depends_on:
+      bff-gateway:
+        condition: service_healthy
+
+networks:
+  default:

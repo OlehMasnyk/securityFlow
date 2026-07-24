@@ -1,0 +1,23 @@
+# Test overrides: use explicit endpoints so the context can start without a live
+# authorization server (issuer-uri would trigger a blocking discovery call at startup).
+spring:
+  security:
+    oauth2:
+      client:
+        provider:
+          idp:
+            authorization-uri: http://127.0.0.1:9000/oauth2/authorize
+            token-uri: http://127.0.0.1:9000/oauth2/token
+            jwk-set-uri: http://127.0.0.1:9000/oauth2/jwks
+            user-info-uri: http://127.0.0.1:9000/userinfo
+            user-name-attribute: sub
+        registration:
+          idp:
+            provider: idp
+            client-id: bff-client
+            client-secret: bff-secret
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/idp"
+            scope:
+              - openid
+              - profile

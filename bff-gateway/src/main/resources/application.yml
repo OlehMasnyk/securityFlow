@@ -1,0 +1,63 @@
+server:
+  port: 8080
+  # Honor X-Forwarded-* headers so the correct browser-facing origin (e.g. behind the
+  # nginx SPA container) is used when building OAuth redirect URIs.
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: bff-gateway
+
+  # Server-side session store. Tokens live here, never in the browser.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  session:
+    store-type: redis
+    timeout: 30m
+
+  security:
+    oauth2:
+      client:
+        provider:
+          idp:
+            issuer-uri: ${IDP_ISSUER_URI:http://127.0.0.1:9000}
+        registration:
+          idp:
+            provider: idp
+            client-id: bff-client
+            client-secret: bff-secret
+            client-name: Demo IdP
+            authorization-grant-type: authorization_code
+            # {baseUrl} resolves to the browser-facing gateway origin.
+            redirect-uri: "{baseUrl}/login/oauth2/code/idp"
+            scope:
+              - openid
+              - profile
+              - orders.read
+              - profile.read
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # SaveSession persists the session (with tokens) before routing.
+          # TokenRelay swaps the session for a Bearer access token on the downstream call.
+          default-filters:
+            - SaveSession
+            - TokenRelay
+          routes:
+            - id: orders-service
+              uri: ${ORDERS_URI:http://127.0.0.1:8081}
+              predicates:
+                - Path=/api/orders/**
+            - id: profile-service
+              uri: ${PROFILE_URI:http://127.0.0.1:8082}
+              predicates:
+                - Path=/api/profile/**
+
+logging:
+  level:
+    org.springframework.security: INFO
+    org.springframework.cloud.gateway: INFO

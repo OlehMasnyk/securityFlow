@@ -1,0 +1,17 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: profile-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${IDP_ISSUER_URI:http://127.0.0.1:9000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
