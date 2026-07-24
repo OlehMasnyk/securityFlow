@@ -1,0 +1,8 @@
+# Test override: jwk-set-uri is fetched lazily (on first token), so the context can start
+# without a running authorization server, unlike issuer-uri which validates at startup.
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://127.0.0.1:9000/oauth2/jwks

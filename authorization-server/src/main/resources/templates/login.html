@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Sign in - Demo Identity Provider</title>
+    <link rel="stylesheet" th:href="@{/css/login.css}"/>
+</head>
+<body>
+<div class="card">
+    <h1>Demo Identity Provider</h1>
+    <p class="subtitle">OAuth 2.1 / OpenID Connect</p>
+
+    <div th:if="${param.error}" class="alert error">Invalid username or password.</div>
+    <div th:if="${param.logout}" class="alert info">You have been signed out.</div>
+
+    <form th:action="@{/login}" method="post">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autofocus required/>
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required/>
+
+        <button type="submit">Sign in</button>
+    </form>
+
+    <p class="hint">Try <code>alice / password</code> or <code>admin / password</code></p>
+</div>
+</body>
+</html>
