@@ -24,8 +24,11 @@ public class DefaultSecurityConfig {
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(authorize -> authorize
+                        // Public: the login page itself, its styling, favicon, and the health probe.
                         .requestMatchers("/login", "/css/**", "/favicon.ico", "/actuator/health/**").permitAll()
+                        // Everything else needs the user to be logged in.
                         .anyRequest().authenticated())
+                // Render our custom login page at /login and process the username/password POST there.
                 .formLogin(form -> form.loginPage("/login").permitAll());
         return http.build();
     }
@@ -36,14 +39,17 @@ public class DefaultSecurityConfig {
      */
     @Bean
     public UserDetailsService userDetailsService(PasswordEncoder passwordEncoder) {
+        // A regular user with a single role. The password is encoded (stored as {bcrypt}...).
         UserDetails alice = User.withUsername("alice")
                 .password(passwordEncoder.encode("password"))
                 .roles("USER")
                 .build();
+        // An admin user with two roles, to show role-based differences downstream.
         UserDetails admin = User.withUsername("admin")
                 .password(passwordEncoder.encode("password"))
                 .roles("USER", "ADMIN")
                 .build();
+        // In-memory store: swap for a JDBC/LDAP-backed store in production.
         return new InMemoryUserDetailsManager(alice, admin);
     }
 

@@ -8,10 +8,12 @@ spring:
     oauth2:
       resourceserver:
         jwt:
+          # Validate incoming Bearer JWTs against this issuer: fetch its JWK set to verify the
+          # signature and require a matching iss claim. Must equal the token's issuer.
           issuer-uri: ${IDP_ISSUER_URI:http://127.0.0.1:9000}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health   # expose only /actuator/health (for Docker healthchecks)
