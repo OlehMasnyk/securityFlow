@@ -92,12 +92,20 @@ Key backend points, and where to read the code:
 
 ### Option A - Docker Compose (everything at once)
 
-The identity provider must be reachable under the **same** host name by both the browser and the
-backend containers. Add this to your `/etc/hosts`:
-
-```
-127.0.0.1  idp
-```
+> **Required first step.** The identity provider must be reachable under the **same** host name by
+> both the browser and the backend containers, so the issuer (`http://idp:9000`) matches everywhere.
+> Inside Compose, `idp` resolves to the `authorization-server` container; your browser needs a hosts
+> entry for it. Without this, the login redirect fails with **"idp's server IP address could not be
+> found"**.
+>
+> Add this line to your hosts file:
+>
+> ```
+> 127.0.0.1  idp
+> ```
+>
+> - **Linux / macOS**: `/etc/hosts` (edit with `sudo`)
+> - **Windows**: `C:\Windows\System32\drivers\etc\hosts` (edit as Administrator)
 
 Then:
 
@@ -105,7 +113,8 @@ Then:
 docker compose up --build
 ```
 
-Open <http://127.0.0.1:8080> and sign in with `alice / password` (or `admin / password`).
+Open <http://127.0.0.1:8080> (or <http://localhost:8080>) and sign in with `alice / password`
+(or `admin / password`).
 
 ### Option B - Run locally with Java + Node
 
@@ -127,6 +136,29 @@ cd frontend && npm install && npm run dev
 ```
 
 Open <http://127.0.0.1:5173> and sign in with `alice / password`.
+
+## Troubleshooting
+
+**Clicking "Sign in" redirects to `http://idp:9000/...` and the page can't be reached.**
+Your browser can't resolve `idp` - that name only exists inside the Docker network. Add
+`127.0.0.1  idp` to your hosts file (see Option A above) and retry. Port 9000 is published to the
+host, so `idp:9000` then reaches the authorization server.
+
+**`invalid_redirect_uri` / "Invalid redirect_uri" after signing in.**
+OAuth compares redirect URIs as **exact strings**, so `localhost` and `127.0.0.1` are different even
+though they resolve to the same address. The demo registers both for ports 8080 and 5173; if you use
+another origin (a LAN IP, a different port, HTTPS), add the matching `redirectUri(...)` to the
+`RegisteredClient` in `AuthorizationServerConfig`.
+
+**`invalid_client` on the token exchange.**
+The client secret didn't match. The registered secret is stored as `{noop}bff-secret`, which requires
+the delegating `PasswordEncoder` in `DefaultSecurityConfig`; a plain `BCryptPasswordEncoder` cannot
+interpret the `{noop}` prefix.
+
+**The BFF fails to start with a connection error.**
+It performs OIDC discovery against `issuer-uri` at startup, so the authorization server must be up
+first. Compose handles this with healthchecks; when running locally, start `authorization-server`
+before the BFF and the resource servers.
 
 ## Try it from the command line
 

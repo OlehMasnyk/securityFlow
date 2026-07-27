@@ -83,7 +83,9 @@ public class SecurityConfig {
             ReactiveClientRegistrationRepository clientRegistrationRepository) {
         OidcClientInitiatedServerLogoutSuccessHandler handler =
                 new OidcClientInitiatedServerLogoutSuccessHandler(clientRegistrationRepository);
-        handler.setPostLogoutRedirectUri("http://127.0.0.1:8080/");
+        // {baseUrl} resolves to the origin the browser actually used, so logout returns the user to
+        // the same host they signed in from (localhost or 127.0.0.1) instead of a hardcoded one.
+        handler.setPostLogoutRedirectUri("{baseUrl}/");
         return handler;
     }
 

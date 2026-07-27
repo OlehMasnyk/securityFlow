@@ -94,10 +94,16 @@ public class AuthorizationServerConfig {
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
                 // 8080 = gateway origin (also used by the nginx SPA in Docker).
                 // 5173 = Vite dev server origin for local frontend development.
+                // Both localhost and 127.0.0.1 are registered because OAuth compares redirect URIs
+                // as exact strings - they are not interchangeable even though they resolve alike.
                 .redirectUri("http://127.0.0.1:8080/login/oauth2/code/idp")
+                .redirectUri("http://localhost:8080/login/oauth2/code/idp")
                 .redirectUri("http://127.0.0.1:5173/login/oauth2/code/idp")
+                .redirectUri("http://localhost:5173/login/oauth2/code/idp")
                 .postLogoutRedirectUri("http://127.0.0.1:8080/")
+                .postLogoutRedirectUri("http://localhost:8080/")
                 .postLogoutRedirectUri("http://127.0.0.1:5173/")
+                .postLogoutRedirectUri("http://localhost:5173/")
                 .scope(OidcScopes.OPENID)
                 .scope(OidcScopes.PROFILE)
                 .scope("orders.read")
