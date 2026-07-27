@@ -11,27 +11,30 @@ spring:
   # Server-side session store. Tokens live here, never in the browser.
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST:localhost}   # 'redis' in Docker, 'localhost' when run directly
       port: ${REDIS_PORT:6379}
   session:
-    store-type: redis
-    timeout: 30m
+    store-type: redis                 # keep OAuth tokens in Redis-backed sessions
+    timeout: 30m                      # idle session lifetime
 
   security:
     oauth2:
       client:
         provider:
           idp:
+            # OIDC discovery: the BFF reads the provider's endpoints + JWKS from
+            # {issuer-uri}/.well-known/openid-configuration at startup.
             issuer-uri: ${IDP_ISSUER_URI:http://127.0.0.1:9000}
         registration:
           idp:
-            provider: idp
-            client-id: bff-client
-            client-secret: bff-secret
+            provider: idp                       # references the provider block above
+            client-id: bff-client               # must match a RegisteredClient on the IdP
+            client-secret: bff-secret           # matches {noop}bff-secret registered on the IdP
             client-name: Demo IdP
-            authorization-grant-type: authorization_code
-            # {baseUrl} resolves to the browser-facing gateway origin.
+            authorization-grant-type: authorization_code   # the interactive login flow
+            # {baseUrl} resolves to the browser-facing gateway origin; must match a registered redirect URI.
             redirect-uri: "{baseUrl}/login/oauth2/code/idp"
+            # Scopes requested at login: openid+profile (OIDC) and the two resource-server scopes.
             scope:
               - openid
               - profile
@@ -48,10 +51,12 @@ spring:
             - SaveSession
             - TokenRelay
           routes:
+            # Requests matching /api/orders/** are proxied to the orders resource server ...
             - id: orders-service
               uri: ${ORDERS_URI:http://127.0.0.1:8081}
               predicates:
                 - Path=/api/orders/**
+            # ... and /api/profile/** to the profile resource server.
             - id: profile-service
               uri: ${PROFILE_URI:http://127.0.0.1:8082}
               predicates:

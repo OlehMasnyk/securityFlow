@@ -6,13 +6,15 @@ spring:
     name: authorization-server
 
 app:
+  # Public issuer identifier. Overridden to http://idp:9000 in Docker so the browser and the
+  # backend containers reach the provider under the same URL. See AuthorizationServerConfig.
   issuer-uri: ${ISSUER_URI:http://127.0.0.1:9000}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health   # expose only /actuator/health (for Docker healthchecks)
 
 logging:
   level:

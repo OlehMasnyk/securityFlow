@@ -65,11 +65,20 @@ public class AuthorizationServerConfig {
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         http
+                // Restrict this filter chain to the protocol endpoints only (/oauth2/authorize,
+                // /oauth2/token, /oauth2/jwks, /.well-known/**, /userinfo, /connect/logout, ...).
+                // Everything else falls through to DefaultSecurityConfig (the login UI).
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
+                // Apply the authorization server configurer and enable the OpenID Connect layer
+                // (ID tokens, UserInfo endpoint, discovery document).
                 .with(authorizationServerConfigurer, authorizationServer ->
                         authorizationServer.oidc(Customizer.withDefaults()))
+                // Every protocol endpoint requires an authenticated user session.
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
+                        // If an unauthenticated browser requests an endpoint (e.g. /oauth2/authorize),
+                        // redirect it to the login page instead of returning 401. Matched only for
+                        // HTML requests so API/token calls still get a proper error response.
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)));
@@ -87,32 +96,50 @@ public class AuthorizationServerConfig {
     @Bean
     public RegisteredClientRepository registeredClientRepository() {
         RegisteredClient bffClient = RegisteredClient.withId(UUID.randomUUID().toString())
+                // Public identifier the client uses in the authorize/token requests.
                 .clientId("bff-client")
+                // Client secret. The {noop} prefix means "stored in plain text" and requires the
+                // delegating PasswordEncoder (see DefaultSecurityConfig) to be matched.
                 .clientSecret("{noop}bff-secret")
+                // The client authenticates to the token endpoint with HTTP Basic (client_id:secret).
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                // Allowed grants: the interactive login flow ...
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                // ... and silent renewal via refresh token.
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                // Allow-list of URIs the authorization code may be returned to. Anything not listed
+                // here is rejected (anti open-redirect / anti-CSRF control).
                 // 8080 = gateway origin (also used by the nginx SPA in Docker).
                 // 5173 = Vite dev server origin for local frontend development.
                 .redirectUri("http://127.0.0.1:8080/login/oauth2/code/idp")
                 .redirectUri("http://127.0.0.1:5173/login/oauth2/code/idp")
+                // Allow-list of URIs the user may be sent back to after RP-initiated logout.
                 .postLogoutRedirectUri("http://127.0.0.1:8080/")
                 .postLogoutRedirectUri("http://127.0.0.1:5173/")
+                // Scopes this client may request. openid+profile are OIDC; the others gate the
+                // two resource servers (mapped to SCOPE_* authorities in the access token).
                 .scope(OidcScopes.OPENID)
                 .scope(OidcScopes.PROFILE)
                 .scope("orders.read")
                 .scope("profile.read")
                 .clientSettings(ClientSettings.builder()
+                        // Reject any authorization request without a PKCE code_challenge.
                         .requireProofKey(true)
+                        // Skip the "do you allow this app?" consent screen (trusted first-party client).
                         .requireAuthorizationConsent(false)
                         .build())
                 .tokenSettings(TokenSettings.builder()
+                        // Short-lived access token limits the damage of a leaked token.
                         .accessTokenTimeToLive(Duration.ofMinutes(15))
+                        // Refresh token lifetime (how long silent renewal keeps working).
                         .refreshTokenTimeToLive(Duration.ofHours(8))
+                        // Rotate the refresh token on each use and invalidate the previous one.
                         .reuseRefreshTokens(false)
                         .build())
                 .build();
 
+        // In-memory store: fine for a demo, lost on restart, not shared across instances.
+        // Production would use a persistent RegisteredClientRepository (e.g. JDBC).
         return new InMemoryRegisteredClientRepository(bffClient);
     }
 
@@ -124,21 +151,32 @@ public class AuthorizationServerConfig {
     public OAuth2TokenCustomizer<JwtEncodingContext> tokenCustomizer() {
         return context -> {
             if (context.getPrincipal() != null && context.getPrincipal().getAuthorities() != null) {
+                // Collect the authenticated user's authorities (e.g. ROLE_USER, ROLE_ADMIN) ...
                 var roles = context.getPrincipal().getAuthorities().stream()
                         .map(authority -> authority.getAuthority())
                         .toList();
+                // ... and write them into a custom "roles" claim on the issued token.
                 context.getClaims().claim("roles", roles);
             }
         };
     }
 
+    /**
+     * The signing key material. The RSA private key signs issued JWTs; the public key is published
+     * at /oauth2/jwks so clients and resource servers can verify signatures.
+     */
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
+        // Generate a fresh RSA keypair at startup (demo only - see the hardening note in the class).
         RSAKey rsaKey = generateRsaKey();
         JWKSet jwkSet = new JWKSet(rsaKey);
         return new ImmutableJWKSet<>(jwkSet);
     }
 
+    /**
+     * Decoder the authorization server uses internally to read the ID tokens it issues (validated
+     * against the same JWK set).
+     */
     @Bean
     public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
         return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
@@ -146,7 +184,9 @@ public class AuthorizationServerConfig {
 
     @Bean
     public AuthorizationServerSettings authorizationServerSettings() {
-        // Issuer must match what resource servers and the BFF use to discover this provider.
+        // The issuer identifier baked into every token (iss claim) and the discovery document.
+        // Must match what resource servers and the BFF use to reach this provider (see the
+        // issuer-consistency note on the issuerUri field).
         return AuthorizationServerSettings.builder()
                 .issuer(issuerUri)
                 .build();

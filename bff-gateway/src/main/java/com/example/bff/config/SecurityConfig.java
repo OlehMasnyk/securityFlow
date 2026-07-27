@@ -37,24 +37,29 @@ public class SecurityConfig {
 
         http
                 .authorizeExchange(exchange -> exchange
-                        // The SPA shell and static assets are public; the flow is user-initiated.
+                        // Public: the SPA shell and static assets, so the app loads for anonymous users.
                         .pathMatchers("/", "/index.html", "/favicon.ico", "/assets/**", "/*.js", "/*.css", "/*.svg").permitAll()
+                        // Public: the OAuth endpoints (login must be able to start) and logout.
                         .pathMatchers("/oauth2/**", "/login/**", "/logout").permitAll()
-                        // Everything the SPA actually consumes requires an authenticated session.
+                        // Protected: everything the SPA actually consumes requires a logged-in session.
                         .pathMatchers("/api/**").authenticated()
+                        // Anything else is served without authentication.
                         .anyExchange().permitAll())
+                // Turn this gateway into an OAuth2/OIDC client. The custom resolver adds PKCE (below).
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationRequestResolver(authorizationRequestResolver))
+                // On logout, also sign the user out at the identity provider (RP-initiated logout).
                 .logout(logout -> logout.logoutSuccessHandler(logoutSuccessHandler))
-                // Return 401 (instead of a cross-origin redirect) so the SPA can render a login button.
+                // For an unauthenticated /api/** call, return 401 instead of a 302 redirect to the IdP.
+                // A cross-origin redirect would break the SPA's fetch(); 401 lets it show a login button.
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
-                // Cookie-based CSRF token readable by JS so the SPA can echo it back.
-                // The plain request handler expects the raw token value (the SPA reads it straight
-                // from the XSRF-TOKEN cookie). The XOR/BREACH masking used by default only matters
-                // when the token is reflected in an HTML response body, which never happens here.
                 .csrf(csrf -> csrf
+                        // Store the CSRF token in a cookie the SPA's JavaScript can read (HttpOnly=false).
                         .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
+                        // Validate the RAW token the SPA sends back. The default XOR/BREACH-masking
+                        // handler expects a masked value, which a cookie-reading SPA cannot produce;
+                        // masking only matters when the token is rendered into an HTML body (never here).
                         .csrfTokenRequestHandler(new ServerCsrfTokenRequestAttributeHandler()));
 
         return http.build();
@@ -68,8 +73,11 @@ public class SecurityConfig {
     @Bean
     public ServerOAuth2AuthorizationRequestResolver authorizationRequestResolver(
             ReactiveClientRegistrationRepository clientRegistrationRepository) {
+        // Default resolver builds the /oauth2/authorize redirect from the client registration.
         DefaultServerOAuth2AuthorizationRequestResolver resolver =
                 new DefaultServerOAuth2AuthorizationRequestResolver(clientRegistrationRepository);
+        // withPkce(): generate a random code_verifier, attach its S256 code_challenge to the
+        // authorization request, keep the verifier server-side, and replay it at token exchange.
         resolver.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
         return resolver;
     }
@@ -81,8 +89,10 @@ public class SecurityConfig {
     @Bean
     public ServerLogoutSuccessHandler logoutSuccessHandler(
             ReactiveClientRegistrationRepository clientRegistrationRepository) {
+        // Sends the browser to the provider's end_session_endpoint (with an id_token_hint).
         OidcClientInitiatedServerLogoutSuccessHandler handler =
                 new OidcClientInitiatedServerLogoutSuccessHandler(clientRegistrationRepository);
+        // Where the provider returns the browser after logging out (must be a registered URI).
         handler.setPostLogoutRedirectUri("http://127.0.0.1:8080/");
         return handler;
     }
@@ -94,6 +104,8 @@ public class SecurityConfig {
     @Bean
     public WebFilter csrfCookieWebFilter() {
         return (exchange, chain) -> {
+            // The CsrfToken is loaded lazily; subscribing to it here forces the XSRF-TOKEN cookie to
+            // be written on the response even when no other component reads the token.
             Mono<CsrfToken> csrfToken = exchange.getAttribute(CsrfToken.class.getName());
             return (csrfToken != null ? csrfToken.then() : Mono.empty()).then(chain.filter(exchange));
         };

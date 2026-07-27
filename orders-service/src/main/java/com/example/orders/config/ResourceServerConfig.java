@@ -19,10 +19,15 @@ public class ResourceServerConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(authorize -> authorize
+                        // Health probe is open (used by Docker/compose healthchecks).
                         .requestMatchers("/actuator/health/**").permitAll()
+                        // Reading orders requires the orders.read scope (mapped to SCOPE_orders.read).
                         .requestMatchers("/api/orders/**").hasAuthority("SCOPE_orders.read")
+                        // Any other endpoint just needs a valid token.
                         .anyRequest().authenticated())
+                // Accept a Bearer JWT and validate it (signature/expiry/issuer) via the IdP's JWK set.
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                // No server-side session: identity comes solely from the JWT on each request.
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         return http.build();
     }
